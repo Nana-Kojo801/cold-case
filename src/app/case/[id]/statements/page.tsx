@@ -1,54 +1,61 @@
 "use client";
+import { motion } from "motion/react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, use } from "react";
-import { ErrorPanel, Loading, TopBar } from "@/components/shell";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Suspense, use, useState } from "react";
+import { CaseImage } from "@/components/case-image";
+import { Pressable, TopHud, bounce } from "@/components/game/ui";
+import { ErrorPanel, Loading } from "@/components/shell";
 import { useCase } from "@/lib/client/useCase";
+import { cn } from "@/lib/utils";
 
-/** Read-only statement ledger per suspect. Contradictions are NOT shown here; the player has to spot them. */
+/** Read-only statement ledger per suspect, as a detective's notebook. Contradictions are NOT marked. */
 function Statements({ id }: { id: string }) {
   const params = useSearchParams();
   const { caseFile, session, error } = useCase(id);
+  const [picked, setPicked] = useState<string | null>(null);
   if (error) return <ErrorPanel message={error} />;
   if (!caseFile || !session) return <Loading />;
-  const first = params.get("s") ?? caseFile.suspects[0]?.id;
+  const from = params.get("s");
+  const sid = picked ?? from ?? caseFile.suspects[0]?.id;
+  const s = caseFile.suspects.find((x) => x.id === sid)!;
+  const entries = session.ledger.filter((e) => e.suspectId === sid);
   const ev = (eid?: string) => caseFile.evidence.find((e) => e.id === eid)?.label;
-  const back = params.get("s") ? `/case/${id}/interrogate/${params.get("s")}` : `/case/${id}`;
 
   return (
-    <div className="flex flex-1 flex-col">
-      <TopBar back={back} title="Statements" />
+    <div className="flex min-h-dvh flex-col">
+      <TopHud back={from ? `/case/${id}/interrogate/${from}` : `/case/${id}`} kicker={caseFile.title} title="Statements" />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-10 pt-4">
-        <Tabs defaultValue={first}>
-          <TabsList className="w-full">
-            {caseFile.suspects.map((s) => (
-              <TabsTrigger key={s.id} value={s.id} className="flex-1 truncate">
-                {s.name.split(" ")[0]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {caseFile.suspects.map((s) => {
-            const entries = session.ledger.filter((e) => e.suspectId === s.id);
+        <div className="flex gap-2.5 overflow-x-auto pb-2">
+          {caseFile.suspects.map((x) => {
+            const on = x.id === sid;
             return (
-              <TabsContent key={s.id} value={s.id} className="space-y-3 pt-2">
-                <div className="text-xs text-muted-foreground">
-                  {s.name}, {s.role}
-                </div>
-                {entries.length === 0 ? <p className="text-sm text-muted-foreground">No statements yet.</p> : null}
-                {entries.map((e) => (
-                  <article key={e.id} className="space-y-1 rounded-md border border-border bg-card/60 p-3">
-                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                      Turn {e.turn}
-                      {e.presentedEvidenceId ? ` · shown: ${ev(e.presentedEvidenceId)}` : ""}
-                    </div>
-                    <p className="text-sm text-primary">Q: {e.playerQuestion}</p>
-                    <p className="font-case text-sm leading-relaxed">A: {e.suspectAnswer}</p>
-                  </article>
-                ))}
-              </TabsContent>
+              <Pressable key={x.id} onClick={() => setPicked(x.id)} aria-pressed={on} className={cn("relative flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3.5", on ? "border-amber bg-raised" : "border-cream/12 bg-panel")}>
+                <CaseImage imageKey={x.portrait.imageKey} alt="" className="size-9 rounded-full" fallbackTitle={x.name[0]} />
+                <span className={cn("hud text-sm", on && "text-amber")}>{x.name.split(" ")[0]}</span>
+                <span className="text-xs text-dimmer">{session.ledger.filter((e) => e.suspectId === x.id).length}</span>
+              </Pressable>
             );
           })}
-        </Tabs>
+        </div>
+        <motion.div key={sid} initial={{ opacity: 0, y: 30, rotate: 2 }} animate={{ opacity: 1, y: 0, rotate: 0.5 }} transition={bounce} className="lined mt-4 rounded bg-paper-2 p-5 text-paper-ink shadow-[0_20px_44px_rgba(0,0,0,0.55)]">
+          <div className="hud text-[13px] text-paper-muted">
+            Notebook · {s.name}, {s.role}
+          </div>
+          {entries.length === 0 ? <p className="tw mt-3 text-sm text-paper-muted">Nothing on the record yet.</p> : null}
+          <ol className="mt-2 space-y-4">
+            {entries.map((e, i) => (
+              <motion.li key={e.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ ...bounce, delay: i * 0.04 }}>
+                <div className="hud text-[10px] text-paper-muted">
+                  Q{e.turn}
+                  {e.presentedEvidenceId ? ` · shown: ${ev(e.presentedEvidenceId)}` : ""}
+                </div>
+                <p className="text-sm text-paper-muted">{e.playerQuestion}</p>
+                <p className="tw text-[15px] leading-7">&ldquo;{e.suspectAnswer}&rdquo;</p>
+              </motion.li>
+            ))}
+          </ol>
+          <p className="tw mt-4 text-xs text-paper-muted">Contradictions aren&rsquo;t marked. Spot them yourself.</p>
+        </motion.div>
       </main>
     </div>
   );

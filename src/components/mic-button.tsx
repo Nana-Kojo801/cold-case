@@ -1,5 +1,6 @@
 "use client";
 import { Loader2, Mic, Square } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, readJson } from "@/lib/client/api";
@@ -107,25 +108,41 @@ export function MicButton({
   };
 
   const big = size === "lg";
+  const recording = state === "recording";
   return (
-    <button
+    <motion.button
       type="button"
       onPointerDown={onDown}
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}
       disabled={disabled || state === "working"}
-      aria-label={state === "recording" ? "Recording. Release or tap to send." : "Hold to ask a question out loud"}
+      aria-label={recording ? "Recording. Release or tap to send." : "Hold to ask a question out loud"}
+      whileTap={{ scale: 0.9 }}
+      animate={{ scale: recording ? 1.12 : 1, backgroundColor: recording ? "#e0574a" : "#f0a83a" }}
+      transition={{ type: "spring", stiffness: 500, damping: 15 }}
       className={cn(
-        "relative flex shrink-0 touch-none select-none items-center justify-center rounded-full border-2 transition-all disabled:opacity-50",
-        big ? "size-20" : "size-12",
-        state === "recording"
-          ? "scale-110 border-destructive bg-destructive text-white shadow-[0_0_0_10px_color-mix(in_oklch,var(--destructive),transparent_75%)]"
-          : "border-primary bg-primary text-primary-foreground shadow-lg",
+        "relative flex shrink-0 touch-none select-none items-center justify-center rounded-full text-amber-ink outline-none focus-visible:ring-4 focus-visible:ring-amber/50 disabled:opacity-50",
+        big ? "size-24 shadow-[0_0_0_8px_rgba(240,168,58,0.18),0_0_0_16px_rgba(240,168,58,0.07),0_14px_30px_rgba(0,0,0,0.5)]" : "size-12",
+        recording && "text-white",
       )}
     >
-      {state === "working" ? <Loader2 className={cn("animate-spin", big ? "size-8" : "size-5")} /> : state === "recording" ? <Square className={big ? "size-7" : "size-4"} /> : <Mic className={big ? "size-9" : "size-5"} />}
-      {state === "recording" ? <span className="absolute inset-0 animate-ping rounded-full border-2 border-destructive/60" /> : null}
-    </button>
+      {recording
+        ? [0, 1, 2].map((k) => (
+            <motion.span
+              key={k}
+              className="absolute inset-0 rounded-full border-2 border-danger"
+              initial={{ scale: 1, opacity: 0.7 }}
+              animate={{ scale: 2, opacity: 0 }}
+              transition={{ duration: 1.4, repeat: Infinity, delay: k * 0.45, ease: "easeOut" }}
+            />
+          ))
+        : null}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span key={state} initial={{ scale: 0, rotate: -40 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 600, damping: 18 }} className="relative">
+          {state === "working" ? <Loader2 className={cn("animate-spin", big ? "size-9" : "size-5")} /> : recording ? <Square className={cn("fill-current", big ? "size-8" : "size-4")} /> : <Mic className={big ? "size-10" : "size-5"} strokeWidth={2.2} />}
+        </motion.span>
+      </AnimatePresence>
+    </motion.button>
   );
 }

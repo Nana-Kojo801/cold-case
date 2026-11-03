@@ -251,3 +251,34 @@ export function describeRef(c: CaseFile, session: Session, ref: string): string 
 export function pct(x: number) {
   return `${Math.round(x * 100)}%`;
 }
+
+// ---------- Ranks, XP and grades ----------
+
+export const RANKS = [
+  { name: "Rookie", min: 0 },
+  { name: "Detective", min: 250 },
+  { name: "Detective Sergeant", min: 500 },
+  { name: "Inspector", min: 1000 },
+  { name: "Chief Inspector", min: 1800 },
+  { name: "Superintendent", min: 3000 },
+];
+
+export function rankFor(xp: number) {
+  let i = 0;
+  while (i + 1 < RANKS.length && xp >= RANKS[i + 1].min) i++;
+  const next = RANKS[i + 1];
+  return { name: RANKS[i].name, index: i, xp, nextName: next?.name ?? null, nextAt: next?.min ?? null, progress: next ? xp / next.min : 1 };
+}
+
+export function gradeFor(score: number): string {
+  const table: [number, string][] = [[95, "A+"], [90, "A"], [85, "A−"], [80, "B+"], [75, "B"], [70, "B−"], [65, "C+"], [60, "C"], [55, "C−"], [45, "D"]];
+  return table.find(([min]) => score >= min)?.[1] ?? "F";
+}
+
+export function xpFor(score: number, solved: boolean) {
+  return Math.round(score * 2.5) + (solved ? 25 : 0);
+}
+
+export function totalXp(items: { score: number; solved: boolean; xp?: number }[]) {
+  return items.reduce((a, p) => a + (p.xp ?? xpFor(p.score, p.solved)), 0);
+}

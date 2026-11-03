@@ -1,13 +1,14 @@
 "use client";
-import { BarChart3, CheckCircle2, Home, Loader2, XCircle } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, Check, ChevronDown, Lightbulb, Loader2, RotateCcw, ScrollText, X } from "lucide-react";
+import { motion, useMotionValue, useTransform, animate as animateValue } from "motion/react";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
-import { ErrorPanel, Loading, TopBar } from "@/components/shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CountUp, GameButton, GameLink, IconLink, ProgressBar, Stamp, bounce, listItem, listParent, pop } from "@/components/game/ui";
+import { ErrorPanel, Loading } from "@/components/shell";
 import { getHealth, postJson } from "@/lib/client/api";
+import { loadProgress, resetSession } from "@/lib/client/db";
 import { useCase } from "@/lib/client/useCase";
-import { pct } from "@/lib/game";
+import { gradeFor, pct, rankFor, totalXp, xpFor } from "@/lib/game";
 import { REASONING_ERROR_TEXT, type CaseFile, type Debrief, type ReasoningErrorLabel, type Session } from "@/lib/types";
 
 type AI = {
@@ -58,11 +59,24 @@ function debriefInput(c: CaseFile, s: Session, d: Debrief) {
 
 export default function DebriefPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { caseFile, session, error, update } = useCase(id);
   const [coaching, setCoaching] = useState(false);
+  const [xpState, setXpState] = useState<{ before: number; after: number } | null>(null);
   const asked = useRef(false);
 
   const result = session?.result;
+
+  // XP before/after this case, from the progress history (read after mount).
+  useEffect(() => {
+    if (!result || !caseFile) return;
+    const all = loadProgress();
+    const after = totalXp(all);
+    const mine = all.find((p) => p.caseId === caseFile.id);
+    const gained = mine ? mine.xp ?? xpFor(mine.score, mine.solved) : 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setXpState({ before: after - gained, after });
+  }, [result, caseFile]);
 
   useEffect(() => {
     if (!caseFile || !session?.result || session.result.generatedBy !== "fallback" || asked.current) return;
@@ -105,137 +119,258 @@ export default function DebriefPage({ params }: { params: Promise<{ id: string }
     return (
       <main className="p-6">
         <ErrorPanel message="No accusation yet for this case.">
-          <Button asChild>
-            <Link href={`/case/${id}/accuse`}>Make an accusation</Link>
-          </Button>
+          <GameLink href={`/case/${id}/accuse`}>Make an accusation</GameLink>
         </ErrorPanel>
       </main>
     );
 
-  const verdictText = result.verdict === "solved" ? "Case closed" : result.verdict === "partial" ? "Right suspect, thin proof" : "Wrong suspect";
   const s = result.stats;
+  const grade = gradeFor(result.score);
+  const gained = xpFor(result.score, result.culpritCorrect);
+  const rankBefore = xpState ? rankFor(xpState.before) : null;
+  const rankAfter = xpState ? rankFor(xpState.after) : null;
+  const promoted = rankBefore && rankAfter && rankAfter.index > rankBefore.index;
+  const total = result.caught.length + result.missed.length;
+  const wrong = result.verdict === "wrong_culprit";
 
   return (
-    <div className="flex flex-1 flex-col">
-      <TopBar back={`/case/${id}`} title="Debrief" />
-      <main className="mx-auto w-full max-w-2xl flex-1 space-y-6 px-4 pb-12 pt-5">
-        <section className="space-y-2 text-center">
-          <div className={`font-case text-3xl ${result.verdict === "wrong_culprit" ? "text-destructive" : "text-primary"}`}>{verdictText}</div>
-          <div className="text-6xl font-bold tabular-nums">{result.score}</div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">out of 100</div>
-          <div className="mx-auto grid max-w-sm grid-cols-4 gap-2 pt-2 text-[11px] text-muted-foreground">
-            <Stat label="Culprit" value={`${result.breakdown.culprit}/40`} />
-            <Stat label="Evidence" value={`${result.breakdown.evidence}/25`} />
-            <Stat label="Contradictions" value={`${result.breakdown.contradictions}/25`} />
-            <Stat label="Questioning" value={`${result.breakdown.questioning}/10`} />
+    <div className="relative flex min-h-dvh flex-col">
+      <div className={`pointer-events-none absolute inset-0 ${wrong ? "bg-[radial-gradient(60%_30%_at_30%_8%,rgba(224,87,74,0.16),transparent_70%)]" : "bg-[radial-gradient(60%_30%_at_30%_8%,rgba(240,168,58,0.18),transparent_70%)]"}`} />
+      <main className="relative mx-auto w-full max-w-[1440px] flex-1 px-[18px] pb-32 pt-4 lg:px-12 lg:pb-12 lg:pt-8">
+        <div className="flex items-start gap-3">
+          <IconLink href={`/case/${id}`} label="Back to the board" className="mt-0.5 lg:hidden">
+            <ArrowLeft />
+          </IconLink>
+          <div className="min-w-0 flex-1">
+            <div className="hud truncate text-xs text-dim lg:text-sm">{caseFile.title}</div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Stamp tone={wrong ? "danger" : "amber"} rotate={-5} delay={0.15} className="border-[5px] px-3.5 text-[38px] leading-tight lg:border-[6px] lg:px-5 lg:text-6xl">
+                {wrong ? "Wrong suspect" : "Case closed"}
+              </Stamp>
+            </div>
+            {result.verdict === "partial" ? <p className="tw mt-3 text-sm text-dim">Right suspect, but your exhibits didn&rsquo;t prove it beyond doubt.</p> : null}
           </div>
-        </section>
-
-        <section className="space-y-2 rounded-lg border border-border bg-card/60 p-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            Coach&apos;s notes {coaching ? <Loader2 className="size-3 animate-spin" /> : null}
-            {result.generatedBy === "muse-wonder" ? <Badge variant="outline">Muse Wonder</Badge> : null}
+          <div className="hidden gap-3 lg:flex">
+            <GameLink href="/" size="lg">
+              Next case
+            </GameLink>
+            <GameLink href={`/case/${id}/statements`} variant="ghost" size="lg">
+              <ScrollText className="size-5" /> Statements
+            </GameLink>
           </div>
-          <p className="text-sm leading-relaxed">{result.summary}</p>
-          <p className="rounded-md bg-primary/10 p-3 text-sm">
-            <span className="font-case text-primary">Next time: </span>
-            {result.tip}
-          </p>
-        </section>
+        </div>
 
-        <section className="space-y-3">
-          <h2 className="font-case text-primary">
-            Contradictions caught ({result.caught.length}/{result.caught.length + result.missed.length})
-          </h2>
-          {result.caught.map((c) => (
-            <article key={c.contradictionId} className="space-y-1 rounded-md border border-[var(--stress-low)]/40 bg-card/60 p-3">
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="size-4 shrink-0 text-[var(--stress-low)]" />
-                <span className="font-case">{c.between[0]}</span>
+        <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-7">
+          <section aria-label="Your score" className="flex flex-col gap-4 lg:w-[440px] lg:shrink-0">
+            <div className="flex items-center gap-5 lg:rounded-[18px] lg:border lg:border-cream/10 lg:bg-panel lg:p-6">
+              <GradeRing score={result.score} grade={grade} wrong={wrong} />
+              <div className="min-w-0 flex-1">
+                <div className="hud text-2xl font-bold lg:text-3xl">
+                  +<CountUp value={gained} delay={1.2} /> XP
+                </div>
+                {xpState && rankAfter ? (
+                  <>
+                    <ProgressBar value={rankAfter.progress * 100} className="mt-2" />
+                    <div className="mt-1.5 text-[13px] text-dim">
+                      {rankAfter.name}
+                      {rankAfter.nextAt ? ` · ${xpState.after} / ${rankAfter.nextAt} to ${rankAfter.nextName}` : ""}
+                    </div>
+                  </>
+                ) : null}
               </div>
-              <p className="pl-6 text-sm text-muted-foreground">vs. {c.between[1]}</p>
-              <p className="pl-6 text-xs">{c.explanation}</p>
-              <p className="pl-6 text-xs text-[var(--stress-low)]">{c.how}</p>
-            </article>
-          ))}
-          {result.missed.length ? <h2 className="pt-2 font-case text-primary">Missed</h2> : null}
-          {result.missed.map((m) => (
-            <article key={m.contradictionId} className="space-y-1 rounded-md border border-destructive/40 bg-card/60 p-3">
-              <div className="flex items-center gap-2 text-sm">
-                <XCircle className="size-4 shrink-0 text-destructive" />
-                <span className="font-case">{m.between[0]}</span>
-              </div>
-              <p className="pl-6 text-sm text-muted-foreground">vs. {m.between[1]}</p>
-              <p className="pl-6 text-xs">{m.explanation}</p>
-              <div className="pl-6 pt-1">
-                <Badge variant="destructive">{REASONING_ERROR_TEXT[m.errorLabel]}</Badge>
-                <p className="mt-1 text-xs text-muted-foreground">{m.errorExplanation}</p>
-              </div>
-            </article>
-          ))}
-        </section>
+            </div>
+            {promoted ? (
+              <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ ...pop, delay: 2 }} className="flex items-center gap-3 rounded-2xl border border-amber/60 bg-amber/10 p-3">
+                <Stamp tone="amber" rotate={-4} delay={2.1} className="text-lg">
+                  Promoted
+                </Stamp>
+                <span className="hud text-lg font-bold">{rankAfter!.name}</span>
+              </motion.div>
+            ) : null}
 
-        {result.otherInconsistencies.length ? (
-          <section className="space-y-2">
-            <h2 className="font-case text-primary">Other slips the contradiction engine noticed</h2>
-            {result.otherInconsistencies.map((o, i) => (
-              <div key={i} className="rounded-md border border-border bg-card/40 p-3 text-xs">
-                <span className="font-case text-sm">{o.suspectName}: </span>
-                {o.claim}
-                <div className="text-muted-foreground">conflicts with {o.conflictsWith}</div>
-                <div className={o.followedUp ? "text-[var(--stress-low)]" : "text-[var(--stress-mid)]"}>{o.followedUp ? "You followed up." : "You let it pass."}</div>
+            <motion.div variants={listParent} initial="hidden" animate="show" className="grid grid-cols-4 gap-1.5">
+              {(
+                [
+                  ["Culprit", result.breakdown.culprit, 40],
+                  ["Evidence", result.breakdown.evidence, 25],
+                  ["Contradictions", result.breakdown.contradictions, 25],
+                  ["Questioning", result.breakdown.questioning, 10],
+                ] as const
+              ).map(([l, v, m]) => (
+                <motion.div key={l} variants={listItem} className="rounded-xl bg-panel px-1 py-2.5 text-center">
+                  <div className="hud text-[17px] font-bold lg:text-[22px]">
+                    <CountUp value={v} delay={0.6} />
+                    <span className="text-xs text-[#8a7c66] lg:text-sm">/{m}</span>
+                  </div>
+                  <div className="hud truncate text-[9px] text-dim lg:text-[10px]">{l}</div>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ ...bounce, delay: 0.5 }} className="rounded-[18px] border border-cream/10 bg-panel p-5">
+              <div className="hud text-[15px] font-semibold">
+                How you questioned · {s.questions} question{s.questions === 1 ? "" : "s"}
               </div>
-            ))}
+              <div className="mt-3.5 flex flex-col gap-3">
+                {(
+                  [
+                    ["Open questions", s.openRate, "#f0a83a"],
+                    ["Follow-ups", s.followupRate, "#f0a83a"],
+                    ["Leading questions", s.leadingRate, "#7aa0c4"],
+                    ["Backed by evidence", s.evidenceRate, "#f0a83a"],
+                  ] as const
+                ).map(([l, v, c], i) => (
+                  <div key={l}>
+                    <div className="flex justify-between text-sm">
+                      <span>{l}</span>
+                      <span className="hud">{pct(v)}</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-well">
+                      <motion.div className="h-full rounded-full" style={{ background: c }} initial={{ width: 0 }} animate={{ width: `${v * 100}%` }} transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.7 + i * 0.1 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3.5 text-[13px] text-dim">
+                Average {s.avgQuestionWords.toFixed(1)} words per question
+                {s.compoundRate > 0 ? ` · ${pct(s.compoundRate)} compound` : ""}
+              </div>
+            </motion.div>
           </section>
-        ) : null}
 
-        <section className="space-y-2">
-          <h2 className="font-case text-primary">How you questioned</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Stat big label="Questions" value={String(s.questions)} />
-            <Stat big label="Open questions" value={pct(s.openRate)} />
-            <Stat big label="Leading questions" value={pct(s.leadingRate)} />
-            <Stat big label="Follow-ups" value={pct(s.followupRate)} />
-            <Stat big label="With evidence" value={pct(s.evidenceRate)} />
-            <Stat big label="Avg. words / question" value={s.avgQuestionWords.toFixed(1)} />
-          </div>
-          {s.compoundRate > 0 ? <p className="text-xs text-muted-foreground">Compound questions: {pct(s.compoundRate)} (ask one thing at a time)</p> : null}
-        </section>
+          <section aria-label="Contradictions" className="flex min-w-0 flex-1 flex-col gap-3.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="hud text-lg lg:text-xl">
+                Contradictions · {result.caught.length} of {total} caught
+              </h2>
+              <span className="hidden text-[13px] text-dimmer sm:block">Revealed now the case is closed</span>
+            </div>
+            <motion.div variants={listParent} initial="hidden" animate="show" className="grid gap-2.5 xl:grid-cols-2">
+              {result.caught.map((c) => (
+                <motion.article key={c.contradictionId} variants={listItem} className="rounded-2xl border border-amber/45 bg-panel p-4">
+                  <Verdict caught />
+                  <div className="tw mt-2 text-[15px] leading-snug">{c.between[0]}</div>
+                  <div className="mt-1 text-sm text-dim">vs. {c.between[1]}</div>
+                  <div className="mt-2 text-[13px] text-amber">{c.how}</div>
+                </motion.article>
+              ))}
+              {result.missed.map((m) => (
+                <motion.article key={m.contradictionId} variants={listItem} className="rounded-2xl border border-danger/55 bg-panel p-4">
+                  <Verdict />
+                  <div className="tw mt-2 text-[15px] leading-snug">{m.between[0]}</div>
+                  <div className="mt-1 text-sm text-dim">vs. {m.between[1]}</div>
+                  <div className="mt-1 text-xs text-dimmer">{m.explanation}</div>
+                  <span className="hud mt-2.5 inline-block rounded bg-danger/18 px-2 py-0.5 text-[11px] text-[#ff8a78]">{REASONING_ERROR_TEXT[m.errorLabel]}</span>
+                  <p className="mt-1 text-xs text-dim">{m.errorExplanation}</p>
+                </motion.article>
+              ))}
+            </motion.div>
 
-        <section className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
-          <h2 className="font-case text-primary">What really happened</h2>
-          <p className="text-sm leading-relaxed">{result.truthReveal}</p>
-          <ol className="space-y-1 pt-1 text-xs text-muted-foreground">
-            {caseFile.truth.timeline.map((t, i) => (
-              <li key={i}>
-                <span className="font-case text-foreground">{t.time}</span> {t.event}
-              </li>
-            ))}
-          </ol>
-        </section>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ ...bounce, delay: 0.9 }} className="flex gap-3.5 rounded-2xl bg-raised p-4 lg:p-5">
+              <Lightbulb className="mt-0.5 size-6 shrink-0 text-amber" />
+              <div className="min-w-0">
+                <div className="hud flex items-center gap-2 text-[13px] text-amber">
+                  Coach&rsquo;s note
+                  {coaching ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {result.generatedBy === "muse-wonder" ? <span className="rounded border border-amber/40 px-1.5 text-[10px]">Muse Wonder</span> : null}
+                </div>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-[#d6c9b0]">{result.summary}</p>
+                <p className="mt-2.5 rounded-xl bg-amber/10 p-3 text-sm">
+                  <span className="hud text-amber">Next time: </span>
+                  {result.tip}
+                </p>
+              </div>
+            </motion.div>
 
-        <div className="flex gap-2">
-          <Button asChild size="lg" className="h-12 flex-1">
-            <Link href="/">
-              <Home /> New case
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="secondary" className="h-12 flex-1">
-            <Link href="/progress">
-              <BarChart3 /> Progress
-            </Link>
-          </Button>
+            {result.otherInconsistencies.length ? (
+              <details className="rounded-2xl border border-cream/10 bg-panel p-4">
+                <summary className="hud flex cursor-pointer list-none items-center justify-between text-sm">
+                  Other slips the contradiction engine noticed ({result.otherInconsistencies.length}) <ChevronDown className="size-4" />
+                </summary>
+                <div className="mt-3 space-y-2">
+                  {result.otherInconsistencies.map((o, i) => (
+                    <div key={i} className="rounded-xl bg-raised p-3 text-xs">
+                      <span className="tw text-sm">{o.suspectName}: </span>
+                      {o.claim}
+                      <div className="text-dim">conflicts with {o.conflictsWith}</div>
+                      <div className={o.followedUp ? "text-good" : "text-amber"}>{o.followedUp ? "You followed up." : "You let it pass."}</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+
+            <details className="rounded-2xl border border-amber/30 bg-amber/5 p-4" open={wrong}>
+              <summary className="hud flex cursor-pointer list-none items-center justify-between text-sm text-amber">
+                What really happened <ChevronDown className="size-4" />
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed">{result.truthReveal}</p>
+              <ol className="mt-2 space-y-1 text-xs text-dim">
+                {caseFile.truth.timeline.map((t, i) => (
+                  <li key={i}>
+                    <span className="tw text-cream">{t.time}</span> {t.event}
+                  </li>
+                ))}
+              </ol>
+            </details>
+
+            <GameButton
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={async () => {
+                await resetSession(id);
+                router.push(`/case/${id}`);
+              }}
+            >
+              <RotateCcw className="size-4" /> Replay this case
+            </GameButton>
+          </section>
         </div>
       </main>
+
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 flex gap-2.5 bg-[linear-gradient(180deg,rgba(13,11,9,0)_0%,#0d0b09_30%)] px-[18px] pt-6 lg:hidden">
+        <GameLink href="/" size="lg" className="flex-1">
+          Next case
+        </GameLink>
+        <GameLink href={`/case/${id}/statements`} variant="ghost" size="lg">
+          Statements
+        </GameLink>
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, big }: { label: string; value: string; big?: boolean }) {
+function Verdict({ caught }: { caught?: boolean }) {
   return (
-    <div className="rounded-md border border-border bg-card/60 p-2 text-center">
-      <div className={big ? "text-xl font-semibold tabular-nums text-foreground" : "text-sm font-semibold tabular-nums text-foreground"}>{value}</div>
-      <div className="text-[10px] uppercase leading-tight tracking-wider text-muted-foreground">{label}</div>
+    <div className={`hud flex items-center gap-2 text-xs ${caught ? "text-amber" : "text-[#ff8a78]"}`}>
+      <motion.span initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={{ ...pop, delay: 0.4 }} className={`flex size-[22px] items-center justify-center rounded-full ${caught ? "bg-amber text-amber-ink" : "bg-danger text-white"}`}>
+        {caught ? <Check className="size-3" strokeWidth={3.5} /> : <X className="size-3" strokeWidth={3.5} />}
+      </motion.span>
+      {caught ? "Caught" : "Missed"}
     </div>
+  );
+}
+
+/** Conic ring that fills to the score, then the letter grade pops in. */
+function GradeRing({ score, grade, wrong }: { score: number; grade: string; wrong: boolean }) {
+  const p = useMotionValue(0);
+  const color = wrong ? "#e0574a" : "#f0a83a";
+  const bg = useTransform(p, (v) => `conic-gradient(${color} 0 ${v}%, #2c241c ${v}% 100%)`);
+  useEffect(() => {
+    const c = animateValue(p, score, { duration: 1.3, delay: 0.4, ease: [0.16, 1, 0.3, 1] });
+    return () => c.stop();
+  }, [p, score]);
+  return (
+    <motion.div style={{ background: bg }} className="flex size-[116px] shrink-0 items-center justify-center rounded-full lg:size-[150px]">
+      <div className="flex size-[98px] flex-col items-center justify-center rounded-full bg-ink lg:size-32 lg:bg-panel">
+        <motion.span initial={{ scale: 0, rotate: -25 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 500, damping: 12, delay: 1.5 }} className="hud text-[46px] font-bold leading-none lg:text-6xl" style={{ color }}>
+          {grade}
+        </motion.span>
+        <span className="hud text-xs text-dim lg:text-sm">
+          <CountUp value={score} delay={0.4} duration={1.3} /> / 100
+        </span>
+      </div>
+    </motion.div>
   );
 }

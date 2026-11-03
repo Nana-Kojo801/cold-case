@@ -7,8 +7,28 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-body);
   --font-mono: var(--font-typewriter);
+  --font-hud: var(--font-oswald);
+  --font-tw: var(--font-typewriter);
+  --color-ink: #0d0b09;
+  --color-panel: #17130f;
+  --color-raised: #221c16;
+  --color-well: #2c241c;
+  --color-cream: #efe6d4;
+  --color-dim: #b3a48c;
+  --color-dimmer: #a39478;
+  --color-amber: #f0a83a;
+  --color-amber-ink: #1a1208;
+  --color-danger: #e0574a;
+  --color-alarm: #ff5a45;
+  --color-good: #7fb08a;
+  --color-paper: #ebe1c8;
+  --color-paper-2: #efe7d2;
+  --color-paper-ink: #2a2118;
+  --color-paper-muted: #6b5a45;
+  --color-manila: #c9a46a;
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --font-heading: var(--font-typewriter);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -48,43 +68,40 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Cold Case theme. All colors, fonts and radii come from these tokens so the redesign is a token swap. */
+/* Cold Case noir theme. Every colour, font and radius comes from these tokens. */
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.15 0.008 60);
-  --foreground: oklch(0.93 0.01 80);
-  --card: oklch(0.19 0.01 60);
-  --card-foreground: oklch(0.93 0.01 80);
-  --popover: oklch(0.19 0.01 60);
-  --popover-foreground: oklch(0.93 0.01 80);
-  --primary: oklch(0.78 0.15 70); /* amber accent */
-  --primary-foreground: oklch(0.18 0.02 60);
-  --secondary: oklch(0.25 0.012 60);
-  --secondary-foreground: oklch(0.93 0.01 80);
-  --muted: oklch(0.23 0.01 60);
-  --muted-foreground: oklch(0.68 0.02 75);
-  --accent: oklch(0.27 0.02 65);
-  --accent-foreground: oklch(0.95 0.01 80);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(1 0 0 / 11%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.78 0.15 70 / 60%);
-  --chart-1: oklch(0.78 0.15 70);
-  --chart-2: oklch(0.65 0.12 200);
-  --chart-3: oklch(0.65 0.2 25);
-  --chart-4: oklch(0.7 0.1 140);
-  --chart-5: oklch(0.6 0.02 75);
-  --sidebar: oklch(0.19 0.01 60);
-  --sidebar-foreground: oklch(0.93 0.01 80);
-  --sidebar-primary: oklch(0.78 0.15 70);
-  --sidebar-primary-foreground: oklch(0.18 0.02 60);
-  --sidebar-accent: oklch(0.27 0.02 65);
-  --sidebar-accent-foreground: oklch(0.95 0.01 80);
-  --sidebar-border: oklch(1 0 0 / 11%);
-  --sidebar-ring: oklch(0.78 0.15 70 / 60%);
-  --stress-low: oklch(0.7 0.1 140);
-  --stress-mid: oklch(0.78 0.15 70);
-  --stress-high: oklch(0.65 0.2 25);
+  --radius: 0.75rem;
+  --background: #0d0b09;
+  --foreground: #efe6d4;
+  --card: #17130f;
+  --card-foreground: #efe6d4;
+  --popover: #17130f;
+  --popover-foreground: #efe6d4;
+  --primary: #f0a83a;
+  --primary-foreground: #1a1208;
+  --secondary: #221c16;
+  --secondary-foreground: #efe6d4;
+  --muted: #221c16;
+  --muted-foreground: #b3a48c;
+  --accent: #2c241c;
+  --accent-foreground: #efe6d4;
+  --destructive: #e0574a;
+  --border: rgba(239, 230, 212, 0.12);
+  --input: rgba(239, 230, 212, 0.16);
+  --ring: rgba(240, 168, 58, 0.6);
+  --chart-1: #f0a83a;
+  --chart-2: #7aa0c4;
+  --chart-3: #e0574a;
+  --chart-4: #7fb08a;
+  --chart-5: #b3a48c;
+  --sidebar: #17130f;
+  --sidebar-foreground: #efe6d4;
+  --sidebar-primary: #f0a83a;
+  --sidebar-primary-foreground: #1a1208;
+  --sidebar-accent: #2c241c;
+  --sidebar-accent-foreground: #efe6d4;
+  --sidebar-border: rgba(239, 230, 212, 0.12);
+  --sidebar-ring: rgba(240, 168, 58, 0.6);
 }
 
 @layer base {
@@ -93,21 +110,51 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
   }
   html {
     @apply font-sans;
   }
 }
+
 @layer utilities {
+  /* Game HUD labels and headings */
+  .hud {
+    font-family: var(--font-oswald), "Arial Narrow", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  /* In-world text: dialogue, documents, case files */
+  .tw,
   .font-case {
     font-family: var(--font-typewriter), ui-monospace, monospace;
   }
   .pb-safe {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
+  .cork {
+    background-color: #2b1f16;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.32) 1px, transparent 1.6px),
+      radial-gradient(rgba(255, 220, 170, 0.05) 1px, transparent 1.6px);
+    background-size: 7px 7px, 11px 11px;
+    background-position: 0 0, 3px 4px;
+  }
+  .height-chart {
+    background-color: #1b1611;
+    background-image: repeating-linear-gradient(180deg, rgba(239, 230, 212, 0.16) 0 1px, transparent 1px 28px);
+  }
+  .lined {
+    background-image: repeating-linear-gradient(180deg, transparent 0 27px, rgba(90, 120, 160, 0.22) 27px 28px);
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 body {
-  background-image: radial-gradient(ellipse at top, oklch(0.2 0.02 65 / 60%), transparent 60%);
+  background-image: radial-gradient(70% 40% at 50% 0%, rgba(240, 168, 58, 0.1), transparent 70%);
   background-attachment: fixed;
 }

@@ -159,6 +159,8 @@ export type ProgressSummary = {
   openRate: number;
   followupRate: number;
   questions: number;
+  xp?: number;
+  grade?: string;
 };
 
 /** A SAM 3.1 object in source-image pixels. Mask covers the box region; bits are packed row-major, base64. */

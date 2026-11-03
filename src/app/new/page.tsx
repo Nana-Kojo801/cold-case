@@ -1,10 +1,9 @@
 "use client";
-import { Check, Circle, Loader2, X } from "lucide-react";
-import Link from "next/link";
+import { Check, Lightbulb, Minus, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ErrorPanel } from "@/components/shell";
-import { Button } from "@/components/ui/button";
+import { CountUp, GameButton, GameLink, IconButton, Stamp, Typewriter, pop } from "@/components/game/ui";
 import { ApiError, postJson } from "@/lib/client/api";
 import { b64ToBlob, blobToScaledDataUrl, saveCase, saveImage } from "@/lib/client/db";
 import { locateEvidence } from "@/lib/client/sam";
@@ -42,6 +41,15 @@ function Generating() {
   const [detail, setDetail] = useState<Partial<Record<StageId, string>>>({});
   const [error, setError] = useState<{ message: string; offerDemo: boolean } | null>(null);
   const [run, setRun] = useState(0);
+  const [info, setInfo] = useState<{ title: string; setting: string; suspects: number } | null>(null);
+  const [photosFrac, setPhotosFrac] = useState(0);
+  const [tip, setTip] = useState(0);
+  const [caseNo] = useState(() => String(Math.floor(1000 + Math.random() * 8999)).padStart(4, "0"));
+
+  useEffect(() => {
+    const id = setInterval(() => setTip((t) => (t + 1) % TIPS.length), 6500);
+    return () => clearInterval(id);
+  }, []);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -59,6 +67,7 @@ function Generating() {
         mark("write", "active");
         let gen = await postJson<GenResponse>("/api/case", { mode: "generate", theme }, signal);
         mark("write", "done", gen.caseFile.title);
+        setInfo({ title: gen.caseFile.title, setting: gen.caseFile.setting, suspects: gen.caseFile.suspects.length });
         let solvable = false;
         for (let attempt = 0; attempt <= 2; attempt++) {
           mark("check", "active", attempt ? `Repair ${attempt} of 2` : "");
@@ -120,6 +129,7 @@ function Generating() {
             failed++;
           }
           done++;
+          setPhotosFrac(done / jobs.length);
           mark("photos", "active", `${done} of ${jobs.length}`);
         });
         mark("photos", failed ? "warn" : "done", failed ? `${failed} shown as text cards` : `${jobs.length} done`);
@@ -151,65 +161,176 @@ function Generating() {
     return () => ac.abort();
   }, [run, theme, router]);
 
+  // Overall progress, weighted by how long each stage usually takes.
+  const W: Record<StageId, number> = { write: 32, check: 10, scene: 14, photos: 34, locate: 7, save: 3 };
+  const pct = Math.round(
+    (Object.keys(W) as StageId[]).reduce((a, id) => {
+      const st = stages[id];
+      if (st === "done" || st === "warn") return a + W[id];
+      if (st === "active") return a + W[id] * (id === "photos" ? photosFrac : 0.35);
+      return a;
+    }, 0),
+  );
+
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-5 pb-10 pt-12">
-      <div className="space-y-1 text-center">
-        <h1 className="font-case text-2xl text-primary">Building the case...</h1>
-        <p className="text-xs text-muted-foreground">A fresh, solvable mystery takes a minute or two.</p>
-      </div>
-      <ol className="space-y-3">
-        {STAGES.map((s) => {
-          const st = stages[s.id];
-          return (
-            <li key={s.id} className="flex items-start gap-3 rounded-md border border-border bg-card/50 p-3">
-              <span className="mt-0.5">
-                {st === "done" ? (
-                  <Check className="size-5 text-[var(--stress-low)]" />
-                ) : st === "active" ? (
-                  <Loader2 className="size-5 animate-spin text-primary" />
-                ) : st === "warn" ? (
-                  <X className="size-5 text-[var(--stress-mid)]" />
-                ) : (
-                  <Circle className="size-5 text-muted-foreground/40" />
-                )}
-              </span>
-              <span className="flex-1">
-                <span className={st === "todo" ? "text-muted-foreground" : ""}>{s.label}</span>
-                {s.model ? <span className="ml-2 text-[11px] uppercase tracking-wider text-muted-foreground">{s.model}</span> : null}
-                {detail[s.id] ? <span className="block text-xs text-muted-foreground">{detail[s.id]}</span> : null}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      {error ? (
-        <ErrorPanel
-          message={error.message}
-          onRetry={() => {
-            setError(null);
-            setStages(INITIAL);
-            setDetail({});
-            setRun((r) => r + 1);
-          }}
-        >
-          {error.offerDemo ? (
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/">Play the demo case</Link>
-            </Button>
-          ) : null}
-        </ErrorPanel>
-      ) : (
-        <Button
-          variant="ghost"
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-1 flex-col gap-5 px-5 pb-6 pt-5">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_40%_at_50%_18%,rgba(240,168,58,0.22),transparent_70%)]" />
+      <div className="relative flex items-center justify-between">
+        <span className="hud text-[13px] text-dim">Opening case file</span>
+        <IconButton
+          label="Cancel"
           onClick={() => {
             abortRef.current?.abort();
             router.push("/");
           }}
         >
-          Cancel
-        </Button>
+          <X />
+        </IconButton>
+      </div>
+
+      {/* The case folder */}
+      <div className="relative mt-1 h-[290px]">
+        <motion.div initial={{ y: 60, opacity: 0, rotate: -4 }} animate={{ y: 0, opacity: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 200, damping: 16 }} className="absolute inset-0">
+          <div className="absolute left-6 top-0 h-[34px] w-[120px] rounded-t-lg bg-[#b8935a]" />
+          <div className="absolute inset-x-6 bottom-0 top-[26px] rounded-[4px_10px_10px_10px] bg-manila shadow-[0_24px_50px_rgba(0,0,0,0.6)]" />
+          <motion.div
+            initial={{ y: 40, rotate: 2 }}
+            animate={{ y: [40, 0, 4, 0], rotate: -2 }}
+            transition={{ duration: 1.1, delay: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
+            className="absolute inset-x-11 top-[46px] h-[226px] bg-paper p-5 text-paper-ink shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+          >
+            <div className="tw text-sm">CASE No. {caseNo}</div>
+            <div className="tw mt-3 text-xs text-paper-muted">SETTING</div>
+            <div className="tw text-sm">
+              {info ? <Typewriter text={info.setting} speed={28} /> : <RedactBar w="70%" />}
+            </div>
+            <div className="tw mt-3 text-xs text-paper-muted">INCIDENT</div>
+            {info ? (
+              <div className="tw line-clamp-3 text-[12px] leading-snug">
+                <Typewriter text={info.title} speed={30} />
+              </div>
+            ) : (
+              <div className="mt-1.5 flex flex-col gap-[7px]">
+                <RedactBar w="92%" />
+                <RedactBar w="74%" />
+                <RedactBar w="84%" faint />
+              </div>
+            )}
+            <div className="tw mt-3 text-xs text-paper-muted">SUSPECTS: {info ? info.suspects : "?"}</div>
+          </motion.div>
+        </motion.div>
+        <Stamp tone="ink" rotate={-12} delay={0.9} className="absolute bottom-6 right-9 bg-paper/35 text-lg">
+          Classified
+        </Stamp>
+      </div>
+
+      <div className="relative">
+        <div className="flex items-baseline justify-between">
+          <span className="hud text-xl font-bold">Building the case</span>
+          <span className="hud text-sm text-amber">
+            <CountUp value={pct} duration={0.6} delay={0} />%
+          </span>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-well">
+          <motion.div className="h-full rounded-full bg-amber shadow-[0_0_12px_#f0a83a]" animate={{ width: `${pct}%` }} transition={{ type: "spring", stiffness: 60, damping: 16 }} />
+        </div>
+      </div>
+
+      <ol className="relative flex flex-col gap-1">
+        {STAGES.map((st, i) => {
+          const state = stages[st.id];
+          return (
+            <motion.li key={st.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.2 + i * 0.06 }} className="flex min-h-10 items-center gap-3">
+              <StageDot state={state} />
+              <span className="min-w-0 flex-1">
+                <span className={state === "active" ? "font-semibold text-amber" : state === "todo" ? "text-dimmer" : ""}>{st.label}</span>
+                <AnimatePresence>
+                  {detail[st.id] ? (
+                    <motion.span key={detail[st.id]} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="block truncate text-xs text-dim">
+                      {detail[st.id]}
+                    </motion.span>
+                  ) : null}
+                </AnimatePresence>
+              </span>
+              {st.model ? <span className="hud text-[11px] text-dimmer">{st.model}</span> : null}
+            </motion.li>
+          );
+        })}
+      </ol>
+
+      {error ? (
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={pop} className="relative rounded-2xl border border-danger/40 bg-danger/10 p-4 text-center" role="alert">
+          <p className="text-sm">{error.message}</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <GameButton
+              onClick={() => {
+                setError(null);
+                setStages(INITIAL);
+                setDetail({});
+                setInfo(null);
+                setPhotosFrac(0);
+                setRun((r) => r + 1);
+              }}
+            >
+              Retry
+            </GameButton>
+            {error.offerDemo ? (
+              <GameLink href="/" variant="ghost">
+                Play the training case
+              </GameLink>
+            ) : null}
+          </div>
+        </motion.div>
+      ) : (
+        <div className="relative mt-auto flex gap-3 rounded-2xl border border-cream/10 bg-raised p-3.5">
+          <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber" />
+          <div className="min-w-0">
+            <div className="hud text-xs text-amber">Detective tip</div>
+            <AnimatePresence mode="wait">
+              <motion.p key={tip} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-1 text-sm leading-relaxed text-[#d6c9b0]">
+                {TIPS[tip]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+        </div>
       )}
     </main>
+  );
+}
+
+const TIPS = [
+  "Lock a witness into an exact time first. Then show the evidence that breaks it.",
+  "Open questions get them talking. Save yes-or-no questions for pinning details down.",
+  "Ask one thing at a time. Compound questions let a witness dodge half of it.",
+  "When an answer is vague, repeat their own words back and ask for specifics.",
+  "Everyone lies about something. Not every liar is the culprit.",
+];
+
+function RedactBar({ w, faint }: { w: string; faint?: boolean }) {
+  return <motion.div className="h-[11px] bg-paper-ink" style={{ width: w }} animate={{ opacity: faint ? [0.2, 0.45, 0.2] : [0.85, 1, 0.85] }} transition={{ duration: 1.6, repeat: Infinity }} />;
+}
+
+function StageDot({ state }: { state: StageState }) {
+  return (
+    <span className="relative flex size-[26px] shrink-0 items-center justify-center">
+      <AnimatePresence mode="popLayout">
+        {state === "done" ? (
+          <motion.span key="done" initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }} transition={pop} className="flex size-[26px] items-center justify-center rounded-full bg-amber text-amber-ink">
+            <Check className="size-3.5" strokeWidth={3.5} />
+          </motion.span>
+        ) : state === "warn" ? (
+          <motion.span key="warn" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={pop} className="flex size-[26px] items-center justify-center rounded-full border-2 border-dim text-dim">
+            <Minus className="size-3.5" strokeWidth={3} />
+          </motion.span>
+        ) : state === "active" ? (
+          <motion.span key="active" initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex size-[26px] items-center justify-center rounded-full border-2 border-amber">
+            <motion.span className="size-2.5 rounded-full bg-amber" animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.9, repeat: Infinity }} />
+          </motion.span>
+        ) : (
+          <motion.span key="todo" className="size-[26px] rounded-full border-2 border-[#4a4036]" />
+        )}
+      </AnimatePresence>
+    </span>
   );
 }
 
