@@ -1,6 +1,7 @@
 "use client";
 import { Box, FileText, Gavel, Users } from "lucide-react";
 import { motion } from "motion/react";
+import { sfx } from "@/lib/client/sfx";
 import { cn } from "@/lib/utils";
 
 export type BoardTab = "scene" | "evidence" | "suspects";
@@ -21,7 +22,10 @@ export function BottomNav({ tab, onTab, evidenceCount, onAccuse }: { tab: BoardT
           <motion.button
             key={id}
             type="button"
-            onClick={() => onTab(id)}
+            onClick={() => {
+              if (id !== tab) sfx("swipe");
+              onTab(id);
+            }}
             aria-current={active ? "page" : undefined}
             whileTap={{ scale: 0.86 }}
             className={cn("relative flex min-h-14 flex-col items-center justify-center gap-1", active ? "text-amber" : "text-dim")}
@@ -45,7 +49,10 @@ export function BottomNav({ tab, onTab, evidenceCount, onAccuse }: { tab: BoardT
           </motion.button>
         );
       })}
-      <motion.button type="button" onClick={onAccuse} whileTap={{ scale: 0.86 }} className="flex min-h-14 flex-col items-center justify-center gap-1 text-danger">
+      <motion.button type="button" onClick={() => {
+          sfx("select");
+          onAccuse();
+        }} whileTap={{ scale: 0.86 }} className="flex min-h-14 flex-col items-center justify-center gap-1 text-danger">
         <Gavel className="size-6" strokeWidth={1.8} />
         <span className="hud text-[11px] font-semibold">Accuse</span>
       </motion.button>

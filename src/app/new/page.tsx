@@ -8,6 +8,7 @@ import { ApiError, postJson } from "@/lib/client/api";
 import { b64ToBlob, blobToScaledDataUrl, saveCase, saveImage } from "@/lib/client/db";
 import { locateEvidence } from "@/lib/client/sam";
 import type { CaseFile } from "@/lib/types";
+import { sfx } from "@/lib/client/sfx";
 
 type StageId = "write" | "check" | "scene" | "photos" | "locate" | "save";
 type StageState = "todo" | "active" | "done" | "warn";
@@ -57,6 +58,7 @@ function Generating() {
     abortRef.current = ac;
     const signal = ac.signal;
     const mark = (id: StageId, s: StageState, d?: string) => {
+      if (s === "done") sfx(id === "save" ? "ready" : "tick");
       setStages((p) => ({ ...p, [id]: s }));
       if (d !== undefined) setDetail((p) => ({ ...p, [id]: d }));
     };
@@ -155,6 +157,7 @@ function Generating() {
       } catch (err) {
         if (signal.aborted || (err as ApiError).code === "cancelled") return;
         const e = err as ApiError;
+        sfx("error");
         setError({ message: e.message || "Case generation failed.", offerDemo: true });
       }
     })();
@@ -202,12 +205,12 @@ function Generating() {
             <div className="tw text-sm">CASE No. {caseNo}</div>
             <div className="tw mt-3 text-xs text-paper-muted">SETTING</div>
             <div className="tw text-sm">
-              {info ? <Typewriter text={info.setting} speed={28} /> : <RedactBar w="70%" />}
+              {info ? <Typewriter text={info.setting} speed={28} sound /> : <RedactBar w="70%" />}
             </div>
             <div className="tw mt-3 text-xs text-paper-muted">INCIDENT</div>
             {info ? (
               <div className="tw line-clamp-3 text-[12px] leading-snug">
-                <Typewriter text={info.title} speed={30} />
+                <Typewriter text={info.title} speed={30} sound />
               </div>
             ) : (
               <div className="mt-1.5 flex flex-col gap-[7px]">

@@ -8,6 +8,7 @@ import { ErrorPanel, Loading } from "@/components/shell";
 import { getHealth, postJson } from "@/lib/client/api";
 import { loadProgress, resetSession } from "@/lib/client/db";
 import { useCase } from "@/lib/client/useCase";
+import { sfx } from "@/lib/client/sfx";
 import { gradeFor, pct, rankFor, totalXp, xpFor } from "@/lib/game";
 import { REASONING_ERROR_TEXT, type CaseFile, type Debrief, type ReasoningErrorLabel, type Session } from "@/lib/types";
 
@@ -76,7 +77,12 @@ export default function DebriefPage({ params }: { params: Promise<{ id: string }
     const gained = mine ? mine.xp ?? xpFor(mine.score, mine.solved) : 0;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setXpState({ before: after - gained, after });
-  }, [result, caseFile]);
+    // Fanfare lands with the letter grade; a promotion gets its own flourish.
+    sfx(result.verdict === "wrong_culprit" ? "lose" : "win", 1.45);
+    if (rankFor(after).index > rankFor(after - gained).index) sfx("promote", 2.15);
+    // Only on first view of this result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.at, caseFile?.id]);
 
   useEffect(() => {
     if (!caseFile || !session?.result || session.result.generatedBy !== "fallback" || asked.current) return;
@@ -166,7 +172,7 @@ export default function DebriefPage({ params }: { params: Promise<{ id: string }
               <GradeRing score={result.score} grade={grade} wrong={wrong} />
               <div className="min-w-0 flex-1">
                 <div className="hud text-2xl font-bold lg:text-3xl">
-                  +<CountUp value={gained} delay={1.2} /> XP
+                  +<CountUp value={gained} delay={1.2} sound /> XP
                 </div>
                 {xpState && rankAfter ? (
                   <>

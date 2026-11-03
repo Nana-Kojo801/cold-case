@@ -10,6 +10,7 @@ import { MicButton } from "@/components/mic-button";
 import { ErrorPanel, Loading } from "@/components/shell";
 import { ApiError, getHealth } from "@/lib/client/api";
 import { loadSettings, saveSettings } from "@/lib/client/db";
+import { sfx } from "@/lib/client/sfx";
 import { speak, stopSpeaking } from "@/lib/client/tts";
 import { analyzeTurn, askSuspect } from "@/lib/client/turn";
 import { useCase } from "@/lib/client/useCase";
@@ -56,11 +57,13 @@ function Room({ id, suspectId }: { id: string; suspectId: string }) {
   useEffect(() => {
     if (!session || !scope.current) return;
     if (prevStress.current !== null && stress > prevStress.current + 4) {
+      sfx("nerve");
       animate(scope.current, { x: [0, -8, 7, -5, 3, 0] }, { duration: 0.45 });
     }
     if (prevCracked.current === false && cracked) {
        
       setCrackFx(true);
+      sfx("crack");
       navigator.vibrate?.([60, 40, 120]);
       animate(scope.current, { x: [0, -16, 14, -10, 8, -4, 0], scale: [1, 1.04, 1] }, { duration: 0.6 });
     }
@@ -100,6 +103,7 @@ function Room({ id, suspectId }: { id: string; suspectId: string }) {
     if (!question) return;
     setFailed(null);
     setPending({ q: question, evidenceId });
+    if (evidenceId) sfx("pin");
     setTyping(false);
     stopSpeaking();
     try {
@@ -152,6 +156,7 @@ function Room({ id, suspectId }: { id: string; suspectId: string }) {
     } catch (err) {
       setPending(null);
       const e = err as ApiError;
+      sfx("error");
       setFailed({ q: question, evidenceId, message: e.message || "The suspect didn't answer.", canOffline: e.code !== "rate_limited" });
     }
   }
@@ -227,7 +232,7 @@ function Room({ id, suspectId }: { id: string; suspectId: string }) {
           <motion.div key={last.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={bounce} className="flex flex-1 flex-col">
             <QuestionLine q={last.playerQuestion} shown={ev(last.presentedEvidenceId)?.label} />
             <p className={cn("tw mt-3 leading-relaxed", big ? "text-[26px]" : "text-lg", breaking ? "text-[#fff2ea]" : "text-cream")}>
-              &ldquo;<Typewriter text={last.suspectAnswer} />&rdquo;
+              &ldquo;<Typewriter text={last.suspectAnswer} sound />&rdquo;
             </p>
             <button type="button" onClick={replay} className={cn("hud mt-auto flex items-center gap-2 pt-3 text-[11px]", breaking ? "text-[#ff8a78]" : "text-amber")}>
               <SpeakingBars active={speaking} />

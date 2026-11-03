@@ -2,6 +2,7 @@
 // Browser storage: IndexedDB for case files, sessions and images; localStorage for small settings/progress.
 import { createStore, del, get, keys, set } from "idb-keyval";
 import type { CaseFile, ProgressSummary, Session } from "@/lib/types";
+import { configureSound } from "./sfx";
 
 const isBrowser = typeof window !== "undefined";
 const stores = isBrowser
@@ -121,13 +122,15 @@ export function addProgress(p: ProgressSummary) {
   }
 }
 
-export type Settings = { voice: boolean };
+export type Settings = { voice: boolean; sfx: boolean; ambience: boolean };
+
+const DEFAULT_SETTINGS: Settings = { voice: true, sfx: true, ambience: true };
 
 export function loadSettings(): Settings {
   try {
-    return { voice: true, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
   } catch {
-    return { voice: true };
+    return { ...DEFAULT_SETTINGS };
   }
 }
 
@@ -137,4 +140,5 @@ export function saveSettings(s: Settings) {
   } catch {
     // ignore
   }
+  configureSound({ sfx: s.sfx, ambience: s.ambience });
 }

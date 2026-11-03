@@ -22,6 +22,8 @@ All model calls run on the server (`src/app/api/*`), through the OpenAI SDK poin
 
 Suspect voices use the browser's `speechSynthesis` with per-character pitch, rate and voice. They aren't a Meta feature.
 
+Sound effects and the rain ambience are synthesized live with the Web Audio API (`src/lib/client/sfx.ts`): no audio files. The rain ducks while a suspect speaks and stops while the microphone records, so it never reaches the transcript. Voices, effects and ambience each have a toggle under Sound on the title screen.
+
 ## How a turn works
 
 1. Hold the mic and speak (or type). The audio is converted to WAV in the browser and transcribed by Muse Voice Transcribe. You can edit the transcript before sending.

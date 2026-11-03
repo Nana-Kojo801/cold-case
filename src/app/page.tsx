@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SoundSettings } from "@/components/game/sound-settings";
 import { GameButton, GameLink, IconButton, Pressable, ProgressBar, Sheet, Stamp, bounce, listItem, listParent } from "@/components/game/ui";
 import { getHealth } from "@/lib/client/api";
-import { DEMO_CASE_ID, listCases, loadDemoCase, loadProgress, loadSession, loadSettings, saveSettings } from "@/lib/client/db";
+import { DEMO_CASE_ID, listCases, loadDemoCase, loadProgress, loadSession, loadSettings } from "@/lib/client/db";
 import { gradeFor, rankFor, totalXp } from "@/lib/game";
 import type { CaseFile, ProgressSummary, Session } from "@/lib/types";
 
@@ -21,7 +22,7 @@ export default function Home() {
   const [progress, setProgress] = useState<ProgressSummary[]>([]);
   const [resume, setResume] = useState<Continue>(null);
   const [voice, setVoice] = useState(true);
-  const [sheet, setSheet] = useState<"new" | "how" | null>(null);
+  const [sheet, setSheet] = useState<"new" | "how" | "sound" | null>(null);
   const [theme, setTheme] = useState("");
   const [opening, setOpening] = useState(false);
 
@@ -70,12 +71,6 @@ export default function Home() {
     router.push(`/new${q}`);
   }
 
-  function toggleVoice() {
-    const v = !voice;
-    setVoice(v);
-    saveSettings({ ...loadSettings(), voice: v });
-  }
-
   const sceneClues = resume ? resume.c.evidence.length : 0;
   const found = resume ? resume.s.collectedEvidenceIds.length : 0;
 
@@ -95,7 +90,7 @@ export default function Home() {
       <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-5 pb-5 pt-5 lg:px-16 lg:pb-10 lg:pt-14">
         <div className="flex items-center justify-between lg:hidden">
           <span className="hud text-xs text-dim">Case files · {solvedCount} closed</span>
-          <IconButton label={voice ? "Turn suspect voices off" : "Turn suspect voices on"} onClick={toggleVoice}>
+          <IconButton label="Sound settings" onClick={() => setSheet("sound")}>
             {voice ? <Volume2 /> : <VolumeX />}
           </IconButton>
         </div>
@@ -171,6 +166,7 @@ export default function Home() {
                 <MenuItem onClick={playDemo}>{opening ? "Opening..." : "Training case"}</MenuItem>
                 <MenuItem href="/progress">Records</MenuItem>
                 <MenuItem onClick={() => setSheet("how")}>How to play</MenuItem>
+                <MenuItem onClick={() => setSheet("sound")}>Sound</MenuItem>
               </div>
 
               <motion.div variants={listItem} className="mt-1 grid grid-cols-3 gap-2 lg:hidden">
@@ -182,9 +178,9 @@ export default function Home() {
                   <BookOpen className="size-5" />
                   <span className="hud text-[11px]">How to play</span>
                 </button>
-                <button type="button" onClick={toggleVoice} className="flex min-h-[52px] flex-col items-center justify-center gap-1 text-[#d6c9b0]">
+                <button type="button" onClick={() => setSheet("sound")} className="flex min-h-[52px] flex-col items-center justify-center gap-1 text-[#d6c9b0]">
                   {voice ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
-                  <span className="hud text-[11px]">Voices {voice ? "on" : "off"}</span>
+                  <span className="hud text-[11px]">Sound</span>
                 </button>
               </motion.div>
             </motion.nav>
@@ -232,8 +228,8 @@ export default function Home() {
 
         <div className="mt-5 flex items-center justify-center gap-3 text-[11px] text-dimmer lg:justify-between lg:text-[13px]">
           <span>Powered by Meta Muse models · No sign-up · Everything stays on your device</span>
-          <button type="button" onClick={toggleVoice} className="hud hidden items-center gap-2 text-[#d6c9b0] lg:flex">
-            {voice ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />} Voices {voice ? "on" : "off"}
+          <button type="button" onClick={() => setSheet("sound")} className="hud hidden items-center gap-2 text-[#d6c9b0] lg:flex">
+            {voice ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />} Sound
           </button>
         </div>
       </div>
@@ -253,6 +249,10 @@ export default function Home() {
         <GameButton size="lg" className="mt-4 w-full" onClick={startNew}>
           Build the case
         </GameButton>
+      </Sheet>
+
+      <Sheet open={sheet === "sound"} onClose={() => setSheet(null)} title="Sound">
+        <SoundSettings onChange={(x) => setVoice(x.voice)} />
       </Sheet>
 
       <Sheet open={sheet === "how"} onClose={() => setSheet(null)} title="How to play">

@@ -1,4 +1,5 @@
 "use client";
+import { duckAmbience } from "./sfx";
 // Suspect voices with the browser's speechSynthesis: per-character pitch, rate and voice.
 
 type VoiceParams = { pitch: number; rate: number; voiceHint?: string };
@@ -54,11 +55,17 @@ export function speak(text: string, id: string, params: VoiceParams, onEnd?: () 
   // Same-voice devices still differ by pitch and rate per character.
   u.pitch = Math.min(2, Math.max(0, params.pitch));
   u.rate = Math.min(1.5, Math.max(0.5, params.rate));
-  u.onend = () => onEnd?.();
-  u.onerror = () => onEnd?.();
+  const done = () => {
+    duckAmbience(false);
+    onEnd?.();
+  };
+  u.onend = done;
+  u.onerror = done;
+  duckAmbience(true);
   synth.speak(u);
 }
 
 export function stopSpeaking() {
+  duckAmbience(false);
   if (ttsSupported()) window.speechSynthesis.cancel();
 }

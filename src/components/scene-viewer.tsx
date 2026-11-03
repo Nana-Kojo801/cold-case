@@ -7,6 +7,7 @@ import { CaseImage } from "@/components/case-image";
 import { GameButton, Sheet, bounce, pop } from "@/components/game/ui";
 import { boxIoU, drawObjects, locateEvidence, segmentPhrases, segmentPoint, tapHits } from "@/lib/client/sam";
 import type { CaseFile, SamObject, Session } from "@/lib/types";
+import { sfx } from "@/lib/client/sfx";
 import { cn } from "@/lib/utils";
 
 const norm = (s: string) =>
@@ -111,6 +112,7 @@ export function SceneViewer({
   }, [found]);
 
   const ping = useCallback((x: number, y: number, text: string) => {
+    sfx("miss");
     const id = ++pingId.current;
     setPings((p) => [...p, { id, x, y, text }]);
     setTimeout(() => setPings((p) => p.filter((q) => q.id !== id)), 1400);
@@ -124,6 +126,7 @@ export function SceneViewer({
         return;
       }
       onCollect(id);
+      sfx("found");
       navigator.vibrate?.([20, 40, 30]);
       setFound({ id, n: Date.now() });
     },
@@ -156,6 +159,7 @@ export function SceneViewer({
       setHighlight(objs);
       ping(fx, fy, objs.length ? "Nothing useful here" : "Nothing there");
     } catch {
+      sfx("error");
       toast.error("Scene search is unavailable right now. Try “Search by hand”.");
     } finally {
       setBusy(false);

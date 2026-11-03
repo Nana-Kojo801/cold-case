@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, readJson } from "@/lib/client/api";
 import { Recorder, toWav16k } from "@/lib/client/audio";
+import { setRecording, sfx } from "@/lib/client/sfx";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,7 +28,13 @@ export function MicButton({
   const pressAt = useRef(0);
   const toggleMode = useRef(false);
 
-  useEffect(() => () => rec.current?.cancel(), []);
+  useEffect(
+    () => () => {
+      rec.current?.cancel();
+      setRecording(false);
+    },
+    [],
+  );
 
   async function start() {
     if (!Recorder.supported()) {
@@ -35,12 +42,16 @@ export function MicButton({
       return;
     }
     try {
+      setRecording(true);
+      sfx("recStart");
       rec.current = new Recorder();
       await rec.current.start();
       setState("recording");
       navigator.vibrate?.(15);
     } catch {
       rec.current = null;
+      setRecording(false);
+      sfx("error");
       setState("idle");
       toast.error("Microphone unavailable. Allow mic access, or type your question.");
     }
@@ -53,6 +64,8 @@ export function MicButton({
     setState("working");
     try {
       const blob = await r.stop();
+      setRecording(false);
+      sfx("recStop");
       if (Date.now() - r.startedAt < 400) {
         setState("idle");
         return;
@@ -76,6 +89,8 @@ export function MicButton({
       if (!data.text) toast.message("We didn't catch that. Try again, or type it.");
       else onTranscript(data.text);
     } catch (err) {
+      setRecording(false);
+      sfx("error");
       toast.error(err instanceof ApiError ? err.message : "Voice input failed. Type your question instead.");
     } finally {
       setState("idle");

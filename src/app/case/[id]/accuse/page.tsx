@@ -9,6 +9,7 @@ import { GameButton, Pressable, Stamp, TopHud, bounce, listItem, listParent, pop
 import { MicButton } from "@/components/mic-button";
 import { ErrorPanel, Loading } from "@/components/shell";
 import { addProgress } from "@/lib/client/db";
+import { sfx } from "@/lib/client/sfx";
 import { useCase } from "@/lib/client/useCase";
 import { gradeFor, scoreSession, xpFor } from "@/lib/game";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ export default function AccusePage({ params }: { params: Promise<{ id: string }>
       grade: gradeFor(result.score),
     });
     setSlam(true);
+    sfx("gavel");
     navigator.vibrate?.([30, 60, 120]);
     setTimeout(() => router.push(`/case/${id}/debrief`), 1300);
   }
@@ -74,7 +76,10 @@ export default function AccusePage({ params }: { params: Promise<{ id: string }>
             return (
               <motion.div key={s.id} variants={listItem}>
                 <Pressable
-                  onClick={() => setCulprit(s.id)}
+                  onClick={() => {
+                    if (culprit !== s.id) sfx("select");
+                    setCulprit(s.id);
+                  }}
                   aria-pressed={on}
                   className={cn("relative block w-full overflow-hidden rounded-xl border text-left transition-colors", on ? "border-2 border-danger bg-[#2a1411] shadow-[0_0_28px_rgba(224,87,74,0.35)]" : "border-cream/14 bg-panel")}
                 >
@@ -105,7 +110,10 @@ export default function AccusePage({ params }: { params: Promise<{ id: string }>
               const k = evidenceIds.indexOf(e.id);
               const on = k >= 0;
               return (
-                <Pressable key={e.id} onClick={() => toggle(evidenceIds, setEvidenceIds, e.id)} aria-pressed={on} aria-label={`Cite ${e.label}`} className="relative aspect-square">
+                <Pressable key={e.id} onClick={() => {
+                    sfx("pin");
+                    toggle(evidenceIds, setEvidenceIds, e.id);
+                  }} aria-pressed={on} aria-label={`Cite ${e.label}`} className="relative aspect-square">
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: on ? 1.04 : 1, rotate: on ? 0 : i % 2 ? 1.5 : -1.5 }}

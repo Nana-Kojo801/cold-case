@@ -4,6 +4,7 @@ import { ArrowLeft, X } from "lucide-react";
 import { AnimatePresence, animate, motion, type HTMLMotionProps } from "motion/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { sfx } from "@/lib/client/sfx";
 import { CRACK_THRESHOLD, NERVOUS_THRESHOLD } from "@/lib/game";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +40,8 @@ export function gameButtonClass(variant: Variant = "amber", size: Size = "md", c
   );
 }
 
-const press = { whileTap: { scale: 0.94 }, whileHover: { scale: 1.025 }, transition: bounce };
+const tapSound = () => sfx("tap");
+const press = { whileTap: { scale: 0.94 }, whileHover: { scale: 1.025 }, transition: bounce, onPointerDownCapture: tapSound };
 
 export function GameButton({ variant, size, className, ...props }: HTMLMotionProps<"button"> & { variant?: Variant; size?: Size }) {
   return <motion.button type="button" {...press} className={gameButtonClass(variant, size, className)} {...props} />;
@@ -57,11 +59,11 @@ export function GameLink({
 
 /** A pressable plain wrapper (for cards and tiles). */
 export function Pressable({ className, ...props }: HTMLMotionProps<"button">) {
-  return <motion.button type="button" whileTap={{ scale: 0.96 }} transition={bounce} className={cn("outline-none focus-visible:ring-2 focus-visible:ring-amber", className)} {...props} />;
+  return <motion.button type="button" whileTap={{ scale: 0.96 }} transition={bounce} onPointerDownCapture={tapSound} className={cn("outline-none focus-visible:ring-2 focus-visible:ring-amber", className)} {...props} />;
 }
 
 export function PressLink({ className, href, ...props }: Omit<HTMLMotionProps<"a">, "href"> & { href: string }) {
-  return <MotionLink href={href} whileTap={{ scale: 0.96 }} transition={bounce} className={cn("outline-none focus-visible:ring-2 focus-visible:ring-amber", className)} {...props} />;
+  return <MotionLink href={href} whileTap={{ scale: 0.96 }} transition={bounce} onPointerDownCapture={tapSound} className={cn("outline-none focus-visible:ring-2 focus-visible:ring-amber", className)} {...props} />;
 }
 
 export function IconButton({ className, label, ...props }: HTMLMotionProps<"button"> & { label: string }) {
@@ -71,6 +73,7 @@ export function IconButton({ className, label, ...props }: HTMLMotionProps<"butt
       aria-label={label}
       whileTap={{ scale: 0.88 }}
       transition={bounce}
+      onPointerDownCapture={tapSound}
       className={cn("flex size-11 shrink-0 items-center justify-center rounded-full border border-cream/20 bg-ink/65 text-cream backdrop-blur [&_svg]:size-5", className)}
       {...props}
     />
@@ -84,6 +87,7 @@ export function IconLink({ className, label, href, ...props }: Omit<HTMLMotionPr
       aria-label={label}
       whileTap={{ scale: 0.88 }}
       transition={bounce}
+      onPointerDownCapture={tapSound}
       className={cn("flex size-11 shrink-0 items-center justify-center rounded-full border border-cream/20 bg-ink/65 text-cream backdrop-blur [&_svg]:size-5", className)}
       {...props}
     />
@@ -115,13 +119,19 @@ export function Stamp({
   rotate = -9,
   delay = 0,
   className,
+  silent,
 }: {
   children: React.ReactNode;
   tone?: "danger" | "amber" | "alarm" | "ink";
   rotate?: number;
   delay?: number;
   className?: string;
+  silent?: boolean;
 }) {
+  // The thud lands on the frame the stamp hits the page.
+  useEffect(() => {
+    if (!silent) sfx("stamp", delay + 0.09);
+  }, [silent, delay]);
   const color = { danger: "border-danger text-danger", amber: "border-amber text-amber", alarm: "border-alarm text-alarm", ink: "border-[#c0392b] text-[#c0392b]" }[tone];
   return (
     <motion.div
@@ -183,12 +193,24 @@ export function ProgressBar({ value, className, glow }: { value: number; classNa
   );
 }
 
-export function CountUp({ value, duration = 1.1, delay = 0.2, format = (n: number) => String(Math.round(n)) }: { value: number; duration?: number; delay?: number; format?: (n: number) => string }) {
+export function CountUp({ value, duration = 1.1, delay = 0.2, format = (n: number) => String(Math.round(n)), sound }: { value: number; duration?: number; delay?: number; format?: (n: number) => string; sound?: boolean }) {
   const [n, setN] = useState(0);
   useEffect(() => {
-    const c = animate(0, value, { duration, delay, ease: [0.16, 1, 0.3, 1], onUpdate: setN });
+    let last = 0;
+    const c = animate(0, value, {
+      duration,
+      delay,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => {
+        setN(v);
+        if (sound && Math.round(v) !== last) {
+          last = Math.round(v);
+          sfx("count");
+        }
+      },
+    });
     return () => c.stop();
-  }, [value, duration, delay]);
+  }, [value, duration, delay, sound]);
   return <span className="tabular-nums">{format(n)}</span>;
 }
 
@@ -204,6 +226,7 @@ export function Sheet({ open, onClose, title, children, className }: { open: boo
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
+    sfx("whoosh");
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -260,7 +283,7 @@ export function SpeakingBars({ active }: { active: boolean }) {
 }
 
 /** Reveals text like a typewriter. */
-export function Typewriter({ text, speed = 18, className, onDone }: { text: string; speed?: number; className?: string; onDone?: () => void }) {
+export function Typewriter({ text, speed = 18, className, onDone, sound }: { text: string; speed?: number; className?: string; onDone?: () => void; sound?: boolean }) {
   const [state, setState] = useState({ text, n: 0 });
   const n = state.text === text ? state.n : 0;
   useEffect(() => {
@@ -268,6 +291,7 @@ export function Typewriter({ text, speed = 18, className, onDone }: { text: stri
     const id = setInterval(() => {
       i = Math.min(text.length, i + 3);
       setState({ text, n: i });
+      if (sound && text[i - 1] !== " ") sfx("key");
       if (i >= text.length) {
         clearInterval(id);
         onDone?.();
