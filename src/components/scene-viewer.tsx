@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CaseImage } from "@/components/case-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { boxIoU, drawObjects, hitTest, locateEvidence, segmentPhrases, segmentPoint } from "@/lib/client/sam";
+import { boxIoU, drawObjects, locateEvidence, segmentPhrases, segmentPoint, tapHits } from "@/lib/client/sam";
 import type { CaseFile, SamObject, Session } from "@/lib/types";
 
 const norm = (s: string) =>
@@ -103,7 +103,7 @@ export function SceneViewer({
     // 1) Precomputed SAM masks for the evidence (works offline once located).
     for (const ev of sceneItems) {
       const l = locs?.[ev.id];
-      if (l && hitTest(l, fx * l.imageWidth, fy * l.imageHeight)) return collect(ev.id, l);
+      if (l && tapHits(l, fx, fy)) return collect(ev.id, l);
     }
     // 2) Live SAM point prompt to highlight whatever is there.
     if (!aiAvailable) {

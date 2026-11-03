@@ -167,8 +167,10 @@ export function scoreSession(c: CaseFile, session: Session): Debrief {
   const culprit = culpritCorrect ? 40 : 0;
   const evidence = Math.round(25 * (citedRequired.length / Math.max(1, c.solution.requiredEvidenceIds.length)));
   const contradictions = Math.round(25 * (caught.length / Math.max(1, kcs.length)));
+  // Quality only counts in proportion to effort: full marks need at least 8 questions.
+  const effort = Math.min(1, stats.questions / 8);
   const questioning = stats.questions
-    ? Math.round(10 * (0.4 * Math.min(1, stats.openRate / 0.5) + 0.4 * Math.min(1, stats.followupRate / 0.35) + 0.2 * (1 - Math.min(1, stats.compoundRate / 0.3))))
+    ? Math.round(10 * effort * (0.4 * Math.min(1, stats.openRate / 0.5) + 0.4 * Math.min(1, stats.followupRate / 0.35) + 0.2 * (1 - Math.min(1, stats.compoundRate / 0.3))))
     : 0;
   const score = culprit + evidence + contradictions + questioning;
   const verdict: Debrief["verdict"] = !culpritCorrect ? "wrong_culprit" : citedRequired.length === c.solution.requiredEvidenceIds.length ? "solved" : "partial";

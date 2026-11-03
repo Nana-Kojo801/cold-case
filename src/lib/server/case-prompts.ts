@@ -132,9 +132,38 @@ QUALITY BAR
 - Lies must be specific enough to be contradicted. Evidence must be concrete.
 - Keep every string concise: descriptions 1 to 2 sentences.`;
 
+// Used when the player gives no theme, so cases don't converge on one favourite setting.
+const SETTING_IDEAS = [
+  "a 1920s jazz club on opening night",
+  "a mountain observatory during a blizzard",
+  "a family-run vineyard at harvest",
+  "a regional baking competition final",
+  "a night train crossing the desert",
+  "a small-town radio station during a live broadcast",
+  "a botanical greenhouse before a rare flower show",
+  "a chess tournament in a grand hotel",
+  "a lighthouse keepers' reunion on a remote island",
+  "a 1960s film set on the last day of shooting",
+  "a ski lodge snowed in overnight",
+  "a university robotics lab before a competition",
+  "a riverboat casino in the 1890s",
+  "a perfume house launching a new scent",
+  "a coastal fish market at dawn",
+  "a violin workshop in an old European town",
+  "a dog show backstage area",
+  "a space-agency mission control during a test launch",
+  "a Victorian theatre on premiere night",
+  "a rooftop restaurant during a city festival",
+  "a tea plantation in the hills during monsoon",
+  "an antique bookshop during an auction",
+];
+
 export function caseUserPrompt(theme?: string) {
   const seed = Math.random().toString(36).slice(2, 8);
-  return `Write a brand-new case now.${theme ? ` Theme or setting idea from the player: "${theme.slice(0, 200)}".` : ""} Variation seed: ${seed}. Return only the JSON.`;
+  const idea = theme?.trim()
+    ? `Theme or setting idea from the player: "${theme.trim().slice(0, 200)}".`
+    : `Setting idea: ${SETTING_IDEAS[Math.floor(Math.random() * SETTING_IDEAS.length)]} (adapt freely; do not use a museum).`;
+  return `Write a brand-new case now. ${idea} Variation seed: ${seed}. Return only the JSON.`;
 }
 
 export function repairUserPrompt(previous: unknown, issues: string[]) {

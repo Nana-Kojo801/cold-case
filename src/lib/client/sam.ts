@@ -27,6 +27,21 @@ export function hitTest(o: SamObject, x: number, y: number): boolean {
 
 const rasterCache = new WeakMap<SamObject, Uint8Array>();
 
+/**
+ * Finger-friendly hit test: exact mask for large objects; for small ones (under 3% of the image) any tap
+ * inside the box plus a margin counts, because thin objects like keys leave gaps in their masks.
+ */
+export function tapHits(o: SamObject, fx: number, fy: number): boolean {
+  const x = fx * o.imageWidth;
+  const y = fy * o.imageHeight;
+  if (hitTest(o, x, y)) return true;
+  const [l, t, r, b] = o.box;
+  const small = ((r - l) * (b - t)) / (o.imageWidth * o.imageHeight) < 0.03;
+  if (!small) return false;
+  const m = 0.025 * Math.max(o.imageWidth, o.imageHeight);
+  return x >= l - m && x < r + m && y >= t - m && y < b + m;
+}
+
 export function boxIoU(a: SamObject, b: SamObject): number {
   const n = (o: SamObject) => [o.box[0] / o.imageWidth, o.box[1] / o.imageHeight, o.box[2] / o.imageWidth, o.box[3] / o.imageHeight];
   const [al, at, ar, ab] = n(a);
