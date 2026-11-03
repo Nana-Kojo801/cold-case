@@ -22,6 +22,9 @@ const STAGES: { id: StageId; label: string; model: string }[] = [
   { id: "save", label: "Filing the case", model: "" },
 ];
 
+// Typical seconds per stage on Meta Model API, used to animate progress and set expectations.
+const EXPECT: Record<StageId, number> = { write: 65, check: 10, scene: 12, photos: 30, locate: 4, save: 1 };
+
 const INITIAL: Record<StageId, StageState> = { write: "todo", check: "todo", scene: "todo", photos: "todo", locate: "todo", save: "todo" };
 
 type GenResponse = { caseFile: CaseFile; raw: unknown; problems: string[] };
@@ -45,6 +48,29 @@ function Generating() {
   const [info, setInfo] = useState<{ title: string; setting: string; suspects: number } | null>(null);
   const [photosFrac, setPhotosFrac] = useState(0);
   const [tip, setTip] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [startedAt, setStartedAt] = useState<Partial<Record<StageId, number>>>({});
+
+  // Tick a clock for the elapsed timer and the smooth progress bar.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  // Keep the phone awake: if the screen sleeps, the browser can drop the request mid-generation.
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null;
+    const wl = (navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+    const acquire = () => {
+      if (wl && document.visibilityState === "visible") wl.request("screen").then((l) => (lock = l)).catch(() => undefined);
+    };
+    acquire();
+    document.addEventListener("visibilitychange", acquire);
+    return () => {
+      document.removeEventListener("visibilitychange", acquire);
+      lock?.release().catch(() => undefined);
+    };
+  }, []);
   const [caseNo] = useState(() => String(Math.floor(1000 + Math.random() * 8999)).padStart(4, "0"));
 
   useEffect(() => {
@@ -59,6 +85,7 @@ function Generating() {
     const signal = ac.signal;
     const mark = (id: StageId, s: StageState, d?: string) => {
       if (s === "done") sfx(id === "save" ? "ready" : "tick");
+      if (s === "active") setStartedAt((p) => (p[id] ? p : { ...p, [id]: Date.now() }));
       setStages((p) => ({ ...p, [id]: s }));
       if (d !== undefined) setDetail((p) => ({ ...p, [id]: d }));
     };
@@ -67,7 +94,7 @@ function Generating() {
       try {
         // 1-2. Case file + solvability check, repairing up to 2 times.
         mark("write", "active");
-        let gen = await postJson<GenResponse>("/api/case", { mode: "generate", theme }, signal);
+        let gen = await postJson<GenResponse>("/api/case", { mode: "generate", theme }, signal, 290_000);
         mark("write", "done", gen.caseFile.title);
         setInfo({ title: gen.caseFile.title, setting: gen.caseFile.setting, suspects: gen.caseFile.suspects.length });
         let solvable = false;
@@ -75,7 +102,7 @@ function Generating() {
           mark("check", "active", attempt ? `Repair ${attempt} of 2` : "");
           let check: CheckResponse;
           try {
-            check = await postJson<CheckResponse>("/api/case/check", { raw: gen.raw }, signal);
+            check = await postJson<CheckResponse>("/api/case/check", { raw: gen.raw }, signal, 120_000);
           } catch (err) {
             if ((err as ApiError).code === "cancelled") throw err;
             // Validator unavailable: accept the case if it passed the structural checks.
@@ -87,7 +114,7 @@ function Generating() {
           }
           if (attempt === 2) break;
           mark("write", "active", "Fixing loose ends");
-          gen = await postJson<GenResponse>("/api/case", { mode: "repair", raw: gen.raw, issues: check.issues, id: gen.caseFile.id }, signal);
+          gen = await postJson<GenResponse>("/api/case", { mode: "repair", raw: gen.raw, issues: check.issues, id: gen.caseFile.id }, signal, 290_000);
           mark("write", "done", gen.caseFile.title);
         }
         if (!solvable) {
@@ -103,7 +130,7 @@ function Generating() {
         let sceneRef: string | undefined;
         let sceneOk = false;
         try {
-          const img = await postJson<{ b64: string; mime: string }>("/api/image", { kind: "scene", prompt: c.scene.prompt }, signal);
+          const img = await postJson<{ b64: string; mime: string }>("/api/image", { kind: "scene", prompt: c.scene.prompt }, signal, 170_000);
           const blob = b64ToBlob(img.b64, img.mime);
           await saveImage(c.scene.imageKey, blob);
           sceneRef = (await blobToScaledDataUrl(blob, 768, 0.8)).dataUrl;
@@ -124,7 +151,7 @@ function Generating() {
         mark("photos", "active", `0 of ${jobs.length}`);
         await pool(jobs, 4, async (j) => {
           try {
-            const img = await postJson<{ b64: string; mime: string }>("/api/image", { kind: j.kind, prompt: j.prompt, reference: j.ref }, signal);
+            const img = await postJson<{ b64: string; mime: string }>("/api/image", { kind: j.kind, prompt: j.prompt, reference: j.ref }, signal, 170_000);
             await saveImage(j.key, b64ToBlob(img.b64, img.mime));
           } catch (err) {
             if ((err as ApiError).code === "cancelled") throw err;
@@ -170,7 +197,12 @@ function Generating() {
     (Object.keys(W) as StageId[]).reduce((a, id) => {
       const st = stages[id];
       if (st === "done" || st === "warn") return a + W[id];
-      if (st === "active") return a + W[id] * (id === "photos" ? photosFrac : 0.35);
+      if (st === "active") {
+        // Ease toward ~95% of the stage while it runs, so the bar never looks frozen.
+        const elapsed = (now - (startedAt[id] ?? now)) / 1000;
+        const eased = 0.95 * (1 - Math.exp((-1.6 * elapsed) / EXPECT[id]));
+        return a + W[id] * (id === "photos" ? Math.max(photosFrac, eased * 0.5) : eased);
+      }
       return a;
     }, 0),
   );
@@ -254,6 +286,7 @@ function Generating() {
                     </motion.span>
                   ) : null}
                 </AnimatePresence>
+                {state === "active" ? <StageClock since={startedAt[st.id]} now={now} expect={EXPECT[st.id]} /> : null}
               </span>
               {st.model ? <span className="hud text-[11px] text-dimmer">{st.model}</span> : null}
             </motion.li>
@@ -272,6 +305,7 @@ function Generating() {
                 setDetail({});
                 setInfo(null);
                 setPhotosFrac(0);
+                setStartedAt({});
                 setRun((r) => r + 1);
               }}
             >
@@ -308,6 +342,19 @@ const TIPS = [
   "When an answer is vague, repeat their own words back and ask for specifics.",
   "Everyone lies about something. Not every liar is the culprit.",
 ];
+
+function StageClock({ since, now, expect }: { since?: number; now: number; expect: number }) {
+  if (!since) return null;
+  const sec = Math.max(0, Math.floor((now - since) / 1000));
+  const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  const usual = expect >= 45 ? "usually about a minute" : `usually ~${expect}s`;
+  const slow = sec > expect * 2.5;
+  return (
+    <span className={`block text-xs tabular-nums ${slow ? "text-amber" : "text-dimmer"}`}>
+      {clock} · {slow ? "taking longer than usual, hang tight" : usual}
+    </span>
+  );
+}
 
 function RedactBar({ w, faint }: { w: string; faint?: boolean }) {
   return <motion.div className="h-[11px] bg-paper-ink" style={{ width: w }} animate={{ opacity: faint ? [0.2, 0.45, 0.2] : [0.85, 1, 0.85] }} transition={{ duration: 1.6, repeat: Infinity }} />;

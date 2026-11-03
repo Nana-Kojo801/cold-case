@@ -195,13 +195,16 @@ export function ProgressBar({ value, className, glow }: { value: number; classNa
 
 export function CountUp({ value, duration = 1.1, delay = 0.2, format = (n: number) => String(Math.round(n)), sound }: { value: number; duration?: number; delay?: number; format?: (n: number) => string; sound?: boolean }) {
   const [n, setN] = useState(0);
+  const shown = useRef(0);
   useEffect(() => {
-    let last = 0;
-    const c = animate(0, value, {
+    // Count from the number currently on screen, so value updates glide instead of restarting at 0.
+    let last = Math.round(shown.current);
+    const c = animate(shown.current, value, {
       duration,
       delay,
       ease: [0.16, 1, 0.3, 1],
       onUpdate: (v) => {
+        shown.current = v;
         setN(v);
         if (sound && Math.round(v) !== last) {
           last = Math.round(v);

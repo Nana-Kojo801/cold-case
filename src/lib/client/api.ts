@@ -12,20 +12,36 @@ export class ApiError extends Error {
   }
 }
 
-export async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
+/**
+ * POST JSON with a hard client-side timeout, so a dropped connection (phone asleep, network
+ * switch) becomes a retryable error instead of a request that waits forever.
+ */
+export async function postJson<T>(url: string, body: unknown, signal?: AbortSignal, timeoutMs = 120_000): Promise<T> {
+  const timer = new AbortController();
+  const t = setTimeout(() => timer.abort(), timeoutMs);
+  const onCancel = () => timer.abort();
+  if (signal?.aborted) timer.abort();
+  signal?.addEventListener("abort", onCancel);
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal,
+      signal: timer.signal,
     });
+    return await readJson<T>(res);
   } catch (err) {
-    if ((err as Error).name === "AbortError") throw new ApiError("Cancelled.", "cancelled", false);
+    if (err instanceof ApiError) throw err;
+    if ((err as Error).name === "AbortError") {
+      if (signal?.aborted) throw new ApiError("Cancelled.", "cancelled", false);
+      throw new ApiError("That took much longer than usual. The connection may have dropped. Please retry.", "timeout", true);
+    }
     throw new ApiError("Can't reach the server. Check your connection and retry.", "network", true);
+  } finally {
+    clearTimeout(t);
+    signal?.removeEventListener("abort", onCancel);
   }
-  return readJson<T>(res);
 }
 
 export async function readJson<T>(res: Response): Promise<T> {
